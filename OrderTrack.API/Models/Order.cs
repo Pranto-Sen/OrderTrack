@@ -20,7 +20,6 @@ namespace OrderTrack.API.Models
         [Required]
         public DateTime OrderDate { get; set; }
 
-        // Navigation Property
         [ForeignKey("ProductId")]
         public Product Product { get; set; }
     }

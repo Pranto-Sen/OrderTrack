@@ -12,7 +12,7 @@ namespace OrderTrack.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize]
     public class OrdersController : ControllerBase
     {
         private readonly OrderTrackDbContext _context;
@@ -28,15 +28,12 @@ namespace OrderTrack.API.Controllers
         {
             try
             {
-                // Check if the product exists
                 var product = await _context.Products.FindAsync(productId);
                 if (product == null) return NotFound("Product not found.");
 
-                // Check if enough stock is available
                 if (product.Stock < quantity)
                     return BadRequest("Insufficient stock.");
 
-                // Create the new order
                 var order = new Order
                 {
                     ProductId = productId,
@@ -47,7 +44,6 @@ namespace OrderTrack.API.Controllers
 
                 _context.Orders.Add(order);
 
-                // Update stock
                 product.Stock -= quantity;
 
                 await _context.SaveChangesAsync();
@@ -65,18 +61,15 @@ namespace OrderTrack.API.Controllers
         {
             try
             {
-                // Fetch the order and related product
                 var order = await _context.Orders.Include(o => o.Product).FirstOrDefaultAsync(o => o.OrderId == orderId);
                 if (order == null) return NotFound("Order not found.");
 
                 var product = order.Product;
                 var difference = newQuantity - order.Quantity;
 
-                // Check if the new quantity exceeds stock
                 if (product.Stock < difference)
                     return BadRequest("Insufficient stock.");
 
-                // Update the order quantity and stock
                 order.Quantity = newQuantity;
                 product.Stock -= difference;
 
@@ -98,10 +91,8 @@ namespace OrderTrack.API.Controllers
                 var order = await _context.Orders.Include(o => o.Product).FirstOrDefaultAsync(o => o.OrderId == orderId);
                 if (order == null) return NotFound("Order not found.");
 
-                // Restore stock
                 order.Product.Stock += order.Quantity;
 
-                // Remove the order
                 _context.Orders.Remove(order);
                 await _context.SaveChangesAsync();
                 return Ok("Order deleted successfully.");
@@ -236,32 +227,26 @@ namespace OrderTrack.API.Controllers
         [HttpPost("bulk-create")]
         public async Task<IActionResult> CreateBulkOrders([FromBody] List<Order> orderRequests)
         {
-            // Validate input
             if (orderRequests == null || !orderRequests.Any())
                 return BadRequest("Order list cannot be empty.");
 
-            // Start a database transaction
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // Loop through each order request
                 foreach (var orderRequest in orderRequests)
                 {
-                    // Find the product associated with the order
                     var product = await _context.Products.FindAsync(orderRequest.ProductId);
                     if (product == null)
                     {
                         throw new Exception($"Product with ID {orderRequest.ProductId} not found.");
                     }
 
-                    // Check if sufficient stock is available
                     if (product.Stock < orderRequest.Quantity)
                     {
                         throw new Exception($"Insufficient stock for Product ID {orderRequest.ProductId}. Requested: {orderRequest.Quantity}, Available: {product.Stock}");
                     }
 
-                    // Create a new Order object
                     var order = new Order
                     {
                         ProductId = orderRequest.ProductId,
@@ -270,23 +255,18 @@ namespace OrderTrack.API.Controllers
                         OrderDate = DateTime.UtcNow
                     };
 
-                    // Add the order to the database and reduce product stock
                     _context.Orders.Add(order);
                     product.Stock -= orderRequest.Quantity;
                 }
 
-                // Save changes to the database
                 await _context.SaveChangesAsync();
 
-                // Commit the transaction
                 await transaction.CommitAsync();
 
-                // Return success message
                 return Ok("Bulk orders created successfully.");
             }
             catch (Exception ex)
             {
-                // Rollback the transaction if any error occurs
                 await transaction.RollbackAsync();
                 return BadRequest($"Transaction failed: {ex.Message}");
             }

@@ -17,7 +17,6 @@ namespace OrderTrack.API.Models
 
         public int Stock { get; set; }
 
-        // Navigation Property
         public ICollection<Order> Orders { get; set; }
     }
 }
